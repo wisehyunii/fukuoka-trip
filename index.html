@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>후쿠오카 미식투어 🍜</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#0f0f0f;--card:#1a1a1a;--card-hover:#222;
+--text:#e8e4df;--muted:#8a8580;--accent:#e07c24;
+--meal:#e07c24;--cafe:#6b9e3d;--move:#5a7fbf;
+--free:#c47a3f;--izakaya:#9b59b6;--star:#f1c40f;--new:#e74c3c;
+}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
+.hero{position:relative;height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;background:linear-gradient(135deg,#1a0a00 0%,#0f0f0f 50%,#0a0a1a 100%)}
+.hero::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 30% 40%,rgba(224,124,36,0.08) 0%,transparent 60%),radial-gradient(circle at 70% 60%,rgba(155,89,182,0.06) 0%,transparent 50%)}
+.hero-content{text-align:center;z-index:1;padding:2rem}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(3rem,8vw,6rem);font-weight:900;background:linear-gradient(135deg,#e07c24,#f1c40f,#e07c24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1;margin-bottom:1rem}
+.hero .subtitle{font-size:clamp(1rem,2.5vw,1.4rem);color:var(--muted);font-weight:300;letter-spacing:0.1em}
+.hero .dates{margin-top:1.5rem;display:inline-flex;gap:1rem;padding:0.8rem 2rem;border:1px solid rgba(224,124,36,0.3);border-radius:50px;font-size:0.9rem;color:var(--accent)}
+.scroll-hint{position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);animation:bounce 2s infinite;color:var(--muted);font-size:0.8rem;letter-spacing:0.2em}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-10px)}}
+
+.main-container{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
+@media(max-width:900px){.main-container{grid-template-columns:1fr;grid-template-rows:50vh 1fr}}
+#map{position:sticky;top:0;height:100vh;z-index:10}
+@media(max-width:900px){#map{position:relative;height:50vh}}
+.schedule-panel{padding:2rem;overflow-y:auto;max-height:100vh;scrollbar-width:thin;scrollbar-color:var(--accent) var(--bg)}
+.schedule-panel::-webkit-scrollbar{width:4px}
+.schedule-panel::-webkit-scrollbar-thumb{background:var(--accent);border-radius:2px}
+
+.day-tabs{display:flex;gap:0.5rem;margin-bottom:2rem;position:sticky;top:0;z-index:5;background:var(--bg);padding:1rem 0}
+.day-tab{flex:1;padding:0.8rem;border:1px solid #333;border-radius:12px;background:var(--card);cursor:pointer;text-align:center;transition:all 0.3s;font-size:0.85rem;color:var(--muted)}
+.day-tab.active{border-color:var(--accent);background:rgba(224,124,36,0.1);color:var(--accent);font-weight:700}
+.day-tab:hover{border-color:var(--accent);transform:translateY(-2px)}
+
+.day-section{display:none}
+.day-section.active{display:block}
+.day-title{font-family:'Playfair Display',serif;font-size:1.6rem;margin-bottom:0.5rem;color:var(--accent)}
+.day-subtitle{color:var(--muted);font-size:0.85rem;margin-bottom:1.5rem;line-height:1.6}
+
+.stop{display:flex;gap:1rem;margin-bottom:0.5rem;padding:0.8rem;border-radius:12px;cursor:pointer;transition:all 0.3s;border:1px solid transparent;position:relative}
+.stop:hover,.stop.active{background:var(--card-hover);border-color:#333}
+.stop.active{border-color:var(--accent);box-shadow:0 0 20px rgba(224,124,36,0.1)}
+.stop-time{min-width:65px;font-size:0.75rem;font-weight:700;color:var(--muted);padding-top:0.3rem;text-align:right}
+.stop-line{display:flex;flex-direction:column;align-items:center;min-width:20px}
+.stop-dot{width:12px;height:12px;border-radius:50%;border:2px solid var(--meal);background:var(--bg);flex-shrink:0;transition:all 0.3s;z-index:1}
+.stop:hover .stop-dot,.stop.active .stop-dot{background:var(--meal);box-shadow:0 0 10px rgba(224,124,36,0.5);transform:scale(1.3)}
+.stop-connector{width:2px;flex:1;background:linear-gradient(to bottom,#333,transparent);margin:4px 0}
+.stop:last-child .stop-connector{display:none}
+.stop-content{flex:1;min-width:0}
+.stop-name{font-weight:700;font-size:0.95rem;margin-bottom:0.2rem;display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap}
+.stop-location{font-size:0.75rem;color:var(--muted);margin-bottom:0.3rem}
+.stop-memo{font-size:0.78rem;color:#aaa;line-height:1.5}
+
+.tag{display:inline-block;padding:0.15rem 0.5rem;border-radius:20px;font-size:0.65rem;font-weight:700;letter-spacing:0.05em}
+.tag-meal{background:rgba(224,124,36,0.15);color:var(--meal)}
+.tag-cafe{background:rgba(107,158,61,0.15);color:var(--cafe)}
+.tag-move{background:rgba(90,127,191,0.15);color:var(--move)}
+.tag-free{background:rgba(196,122,63,0.15);color:var(--free)}
+.tag-izakaya{background:rgba(155,89,182,0.2);color:var(--izakaya)}
+.tag-new{background:rgba(231,76,60,0.2);color:var(--new)}
+.tag-star{background:rgba(241,196,15,0.2);color:var(--star)}
+
+.dot-meal{border-color:var(--meal)}.dot-cafe{border-color:var(--cafe)}.dot-move{border-color:var(--move)}
+.dot-free{border-color:var(--free)}.dot-izakaya{border-color:var(--izakaya)}.dot-new{border-color:var(--new)}.dot-star{border-color:var(--star)}
+
+.checklist-section{padding:2rem;max-width:700px;margin:0 auto}
+.checklist-title{font-family:'Playfair Display',serif;font-size:1.8rem;color:var(--accent);margin-bottom:1.5rem;text-align:center}
+.check-item{display:flex;align-items:flex-start;gap:1rem;padding:1rem;border-bottom:1px solid #222}
+.check-item input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent);flex-shrink:0;margin-top:2px;cursor:pointer}
+.check-label{font-weight:600;font-size:0.9rem;margin-bottom:0.2rem}
+.check-detail{font-size:0.8rem;color:var(--muted);line-height:1.5}
+
+footer{text-align:center;padding:3rem;color:var(--muted);font-size:0.75rem;border-top:1px solid #222}
+
+.leaflet-popup-content-wrapper{background:var(--card)!important;color:var(--text)!important;border-radius:12px!important;border:1px solid #333!important;box-shadow:0 10px 30px rgba(0,0,0,0.5)!important}
+.leaflet-popup-tip{background:var(--card)!important}
+.leaflet-popup-content{font-family:'Noto Sans KR',sans-serif!important;font-size:13px!important;line-height:1.6!important}
+.popup-title{font-weight:700;font-size:14px;margin-bottom:4px}
+.popup-loc{color:var(--muted);font-size:11px;margin-bottom:4px}
+.popup-memo{font-size:12px;color:#bbb}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-content">
+    <h1>후쿠오카<br>미식투어</h1>
+    <p class="subtitle">FUKUOKA GOURMET MAP</p>
+    <div class="dates">
+      <span>🛫 3월 12일 (목)</span>
+      <span>→</span>
+      <span>3월 13일 (금) 🍺</span>
+    </div>
+  </div>
+  <div class="scroll-hint">↓ SCROLL DOWN ↓</div>
+</div>
+
+<div class="main-container">
+  <div id="map"></div>
+  <div class="schedule-panel" id="schedulePanel">
+    <div class="day-tabs">
+      <div class="day-tab active" onclick="switchDay(1)">🍜 Day 1<br><small>3/12 목</small></div>
+      <div class="day-tab" onclick="switchDay(2)">🍺 Day 2<br><small>3/13 금</small></div>
+    </div>
+
+    <div class="day-section active" id="day1">
+      <div class="day-title">Day 1 — 공항 → 텐진 → 무사시</div>
+      <div class="day-subtitle">공항 9시 도착 → 하카타역 → 나카스 → 텐진 → 와타나베도리<br>이자카야 야키토리 무사시로 마무리 🍺</div>
+      <div id="day1-stops"></div>
+    </div>
+
+    <div class="day-section" id="day2">
+      <div class="day-title">Day 2 — 사시스 → ⭐히키니쿠토코메 → 토리카와</div>
+      <div class="day-subtitle">하카타역 스시 → 텐진 모츠나베 → 17:45 예약 → KITTE 이자카야 🍺</div>
+      <div id="day2-stops"></div>
+    </div>
+  </div>
+</div>
+
+<div class="checklist-section">
+  <div class="checklist-title">✅ 사전 체크리스트</div>
+  <div id="checklist"></div>
+</div>
+
+<footer>후쿠오카 3박 4일 미식투어 — 맛있는 여행 되세요! 🍜🍣🍢🍩</footer>
+
+<script>
+const day1Data = [
+  {time:"09:00",tag:"move",emoji:"✈️",name:"후쿠오카 공항 도착",loc:"후쿠오카 공항",memo:"짐 찾기 + 셔틀 → 지하철 하카타역 (약 1시간)",lat:33.5859,lng:130.4508},
+  {time:"10:15",tag:"cafe",emoji:"🍞",name:"il forno del mignon",loc:"하카타역 구내 1층",memo:"미니 크로아상. 멘타이코·초콜릿·고구마 맛 추천",lat:33.5902,lng:130.4205},
+  {time:"10:35",tag:"cafe",emoji:"🍰",name:"후르츠가든 신선",loc:"하카타역 데이토스 1층",memo:"3월 딸기 시즌! 딸기 산도 필수. 오후엔 품절",lat:33.5898,lng:130.4210},
+  {time:"10:45",tag:"move",emoji:"🚶",name:"하카타역 → 우동 타이라",loc:"도보 10분",memo:"하카타역 남쪽 방면 이동",lat:null,lng:null},
+  {time:"11:00",tag:"new",emoji:"🆕",name:"우동 타이라 (원조 후쿠오카 우동)",loc:"하카타역 남쪽 도보 10분",memo:"NEW! 고보텐 우동 추천. 런치만 11~15시, 일요일 휴무",lat:33.5832,lng:130.4160},
+  {time:"12:00",tag:"move",emoji:"🚶",name:"우동 타이라 → 에이토",loc:"도보 15분",memo:"나카스 방면으로 이동",lat:null,lng:null},
+  {time:"12:30",tag:"meal",emoji:"🍽",name:"우나기노 에이토 (장어덮밥)",loc:"나카스",memo:"⭐4.9! 구이 & 찜 둘 다 주문. 대기 40분~1시간",lat:33.5919,lng:130.4066},
+  {time:"14:00",tag:"cafe",emoji:"🍞",name:"풀풀 하카타 (멘타이 프랑스)",loc:"기온",memo:"멘타이 프랑스빵 시그니처! 밤마카다미아도",lat:33.5899,lng:130.4125},
+  {time:"15:30",tag:"cafe",emoji:"🍰",name:"링고 애플파이",loc:"텐진 지하상가",memo:"오리지널 커스타드. 따뜻할 때 제맛!",lat:33.5905,lng:130.3990},
+  {time:"15:45",tag:"free",emoji:"🛍",name:"텐진 자유시간",loc:"텐진",memo:"지하상가·다이마루·이와타야 쇼핑",lat:null,lng:null},
+  {time:"17:00",tag:"meal",emoji:"🍽",name:"돈카츠 와카바 (디너)",loc:"텐진",memo:"저온 유방 튀김, 25분 소요. 로스+히레 세트",lat:33.5926,lng:130.4022},
+  {time:"19:00",tag:"meal",emoji:"🥩",name:"야키니쿠 아카탄",loc:"와타나베도리",memo:"규슈 흑모와규 전문! 디저트 코스도",lat:33.5885,lng:130.4027},
+  {time:"21:00",tag:"izakaya",emoji:"🍺",name:"야키토리 무사시 (이자카야)",loc:"와타나베도리",memo:"🍺마무리! 와규·돼지바라 꼬치. 예약 권장. 자정까지",lat:33.5885,lng:130.4038}
+];
+
+const day2Data = [
+  {time:"11:00",tag:"meal",emoji:"🍣",name:"스시사카바 사시스",loc:"KITTE하카타 B1",memo:"가성비 스시! 참치 롤 인기",lat:33.5889,lng:130.4191},
+  {time:"12:15",tag:"move",emoji:"🚶",name:"사시스 → 모츠나베 라쿠텐치",loc:"도보+지하철 15분",memo:"텐진 방면 이동",lat:null,lng:null},
+  {time:"13:00",tag:"new",emoji:"🆕",name:"모츠나베 라쿠텐치 텐진본점",loc:"텐진 아크로스 B2",memo:"NEW! ⭐4.7 원조 모츠나베. 온라인 예약 가능. 챠폰 필수",lat:33.5919,lng:130.4026},
+  {time:"14:30",tag:"cafe",emoji:"🍩",name:"아임도넛 (I'm donut?)",loc:"와타나베도리",memo:"나마 도넛 시그니처! ⚠️카드만 가능(현금X)",lat:33.5885,lng:130.4024},
+  {time:"15:00",tag:"free",emoji:"🛍",name:"텐진·다이묘 자유시간",loc:"텐진·다이묘",memo:"쇼핑·카페. 17:30에 이마이즈미로 이동",lat:null,lng:null},
+  {time:"17:45",tag:"star",emoji:"⭐",name:"히키니쿠토코메 이마이즈미",loc:"이마이즈미",memo:"⭐예약 17:45! 1인 3개 패티 + 밥 무한리필",lat:33.5836,lng:130.3991},
+  {time:"18:45",tag:"move",emoji:"🚶",name:"히키니쿠토코메 → 토리카와야키 구",loc:"도보+지하철 20분",memo:"KITTE하카타 방면 이동",lat:null,lng:null},
+  {time:"19:30",tag:"izakaya",emoji:"🍺",name:"토리카와야키 구 KITTE하카타",loc:"KITTE하카타 B1",memo:"🍺마무리! 6일 구운 닭껍질 꼬치. 소금구이. 23:30까지",lat:33.5888,lng:130.4193}
+];
+
+const checklistData = [
+  {label:"히키니쿠토코메 예약",detail:"⭐ 3/13(금) 17:45 예약 완료. 사전 결제 확인"},
+  {label:"모츠나베 라쿠텐치 예약",detail:"🆕 온라인 예약 가능! 13시경 방문 예정으로 예약 권장"},
+  {label:"야키토리 무사시 예약",detail:"🆕 전화 예약만 가능. 워크인 시 21시 이후 추천"},
+  {label:"우나기노 에이토",detail:"예약 불가. 3/12(목) 10:50까지 오픈런"},
+  {label:"우동 타이라 영업시간",detail:"🆕 런치만 11~15시, 일요일 휴무 → 목요일 OK"},
+  {label:"아임도넛 결제",detail:"현금 안 됨! 카드(비자/마스터) 필수"},
+  {label:"와카바 영업시간",detail:"런치 10:30~14:30 / 디너 17:00~21:30"},
+  {label:"풀풀 하카타 휴무",detail:"화요일 휴무 → 목요일 방문 OK"},
+  {label:"현금 준비",detail:"야타이·우동 타이라 등 현금 전용. 충분히 환전"},
+  {label:"교통카드",detail:"스이카/파스모 또는 현지 구매. 지하철·버스용"}
+];
+
+const tagColors = {meal:'#e07c24',cafe:'#6b9e3d',move:'#5a7fbf',free:'#c47a3f',izakaya:'#9b59b6',star:'#f1c40f',new:'#e74c3c'};
+const tagLabels = {meal:'식사',cafe:'카페',move:'이동',free:'자유',izakaya:'이자카야',star:'예약',new:'NEW'};
+
+function renderStops(containerId, data) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = data.map((s, i) => `
+    <div class="stop" data-idx="${i}" onclick="focusStop(${s.lat},${s.lng},this,'${s.name}','${s.loc}','${s.memo.replace(/'/g,"\\'")}')">
+      <div class="stop-time">${s.time}</div>
+      <div class="stop-line">
+        <div class="stop-dot dot-${s.tag}"></div>
+        <div class="stop-connector"></div>
+      </div>
+      <div class="stop-content">
+        <div class="stop-name">
+          <span>${s.emoji} ${s.name}</span>
+          <span class="tag tag-${s.tag}">${tagLabels[s.tag]}</span>
+        </div>
+        <div class="stop-location">${s.loc}</div>
+        <div class="stop-memo">${s.memo}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderChecklist() {
+  const c = document.getElementById('checklist');
+  c.innerHTML = checklistData.map(item => `
+    <div class="check-item">
+      <input type="checkbox">
+      <div>
+        <div class="check-label">${item.label}</div>
+        <div class="check-detail">${item.detail}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Map
+const map = L.map('map',{zoomControl:false}).setView([33.5895,130.408],14);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OpenStreetMap contributors',maxZoom:19
+}).addTo(map);
+setTimeout(()=>map.invalidateSize(),300);
+
+let markers = {1:[], 2:[]};
+let polylines = {1:null, 2:null};
+
+function createIcon(emoji, color) {
+  return L.divIcon({
+    html:`<div style="background:${color};width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.5);border:2px solid rgba(255,255,255,0.3)">${emoji}</div>`,
+    className:'',iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-18]
+  });
+}
+
+function addMarkers(dayNum, data) {
+  const coords = [];
+  data.forEach(s => {
+    if (!s.lat) return;
+    const color = tagColors[s.tag] || '#888';
+    const marker = L.marker([s.lat, s.lng], {icon: createIcon(s.emoji, color)})
+      .bindPopup(`<div class="popup-title">${s.emoji} ${s.name}</div><div class="popup-loc">${s.loc}</div><div class="popup-memo">${s.memo}</div>`)
+      .addTo(map);
+    markers[dayNum].push(marker);
+    coords.push([s.lat, s.lng]);
+  });
+  if (coords.length > 1) {
+    polylines[dayNum] = L.polyline(coords, {color: tagColors[dayNum===1?'meal':'izakaya'], weight:2, opacity:0.4, dashArray:'6,8'}).addTo(map);
+  }
+}
+
+function showDay(dayNum) {
+  [1,2].forEach(d => {
+    markers[d].forEach(m => m.remove());
+    if(polylines[d]) polylines[d].remove();
+  });
+  markers[dayNum].forEach(m => m.addTo(map));
+  if(polylines[dayNum]) polylines[dayNum].addTo(map);
+  const coords = (dayNum===1?day1Data:day2Data).filter(s=>s.lat).map(s=>[s.lat,s.lng]);
+  if(coords.length) map.fitBounds(coords,{padding:[40,40]});
+}
+
+function switchDay(dayNum) {
+  document.querySelectorAll('.day-tab').forEach((t,i) => t.classList.toggle('active', i===dayNum-1));
+  document.querySelectorAll('.day-section').forEach((s,i) => s.classList.toggle('active', i===dayNum-1));
+  showDay(dayNum);
+}
+
+function focusStop(lat, lng, el, name, loc, memo) {
+  document.querySelectorAll('.stop').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  if (lat && lng) {
+    map.flyTo([lat, lng], 16, {duration: 0.8});
+    markers[document.querySelector('.day-tab.active')===document.querySelectorAll('.day-tab')[0]?1:2]
+      .find(m => {
+        const ll = m.getLatLng();
+        return Math.abs(ll.lat-lat)<0.0001 && Math.abs(ll.lng-lng)<0.0001;
+      })?.openPopup();
+  }
+}
+
+// Init
+renderStops('day1-stops', day1Data);
+renderStops('day2-stops', day2Data);
+renderChecklist();
+addMarkers(1, day1Data);
+addMarkers(2, day2Data);
+showDay(1);
+
+// Scroll to map
+const hero = document.querySelector('.hero');
+const observer = new IntersectionObserver(entries => {
+  if(!entries[0].isIntersecting) {
+    setTimeout(()=>{map.invalidateSize();showDay(1);},200);
+  }
+},{threshold:0});
+observer.observe(hero);
+window.addEventListener('resize',()=>map.invalidateSize());
+setTimeout(()=>{map.invalidateSize();showDay(1);},500);
+</script>
+</body>
+</html>
